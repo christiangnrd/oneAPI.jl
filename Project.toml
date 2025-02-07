@@ -48,3 +48,6 @@ oneAPI_Support_jll = "0.7"
 
 [extras]
 libigc_jll = "94295238-5935-5bd7-bb0f-b00942e9bdd5"
+
+[sources]
+GPUUtils = {url = "https://github.com/christiangnrd/GPUUtils.jl"}
