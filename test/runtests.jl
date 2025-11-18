@@ -3,6 +3,11 @@
     Pkg.add(url="https://github.com/JuliaGPU/KernelAbstractions.jl", rev="main")
 end
 
+@static if VERSION < v"1.11" && get(ENV, "BUILDKITE_PIPELINE_NAME", "oneAPI.jl") == "oneAPI.jl"
+    using Pkg
+    Pkg.add(url="https://github.com/JuliaGPU/KernelAbstractions.jl", rev="main")
+end
+
 using ParallelTestRunner
 using oneAPI
 
