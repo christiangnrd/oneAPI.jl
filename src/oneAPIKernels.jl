@@ -1,9 +1,10 @@
 module oneAPIKernels
 
 using ..oneAPI
-using ..oneAPI: @device_override, SPIRVIntrinsics, method_table
+using ..oneAPI: @device_override, SPIRVIntrinsics, method_table, kernel_convert, zefunction
 
 import KernelAbstractions as KA
+import KernelAbstractions.KernelIntrinsics as KI
 
 import StaticArrays
 
@@ -162,31 +163,60 @@ function (obj::KA.Kernel{oneAPIBackend})(args...; ndrange=nothing, workgroupsize
     return nothing
 end
 
+KI.argconvert(::oneAPIBackend, arg) = kernel_convert(arg)
+
+function KI.kernel_function(::oneAPIBackend, f::F, tt::TT=Tuple{}; name = nothing, kwargs...) where {F,TT}
+    kern = zefunction(f, tt; name, kwargs...)
+    KI.Kernel{oneAPIBackend, typeof(kern)}(oneAPIBackend(), kern)
+end
+
+function (obj::KI.Kernel{oneAPIBackend})(args...; numworkgroups = 1, workgroupsize = 1)
+    KI.check_launch_args(numworkgroups, workgroupsize)
+
+    items = (workgroupsize..., ntuple(_ -> 1, 3 - length(workgroupsize))...)
+
+    groups = (numworkgroups..., ntuple(_ -> 1, 3 - length(numworkgroups))...)
+
+    obj.kern(args...; items, groups)
+    return nothing
+end
+
+
+function KI.kernel_max_work_group_size(kernel::KI.Kernel{<:oneAPIBackend}; max_work_items::Int=typemax(Int))::Int
+    group_size = oneAPI.launch_configuration(kernel.kern)
+    Int(min(group_size, max_work_items))
+end
+function KI.max_work_group_size(::oneAPIBackend)::Int
+    oneAPI.oneL0.compute_properties(device()).maxTotalGroupSize
+end
+function KI.multiprocessor_count(::oneAPIBackend)::Int
+    oneAPI.oneL0.properties(device()).numSlices
+end
 
 ## Indexing Functions
-
-@device_override @inline function KA.__index_Local_Linear(ctx)
-    return get_local_id()
+## COV_EXCL_START
+@device_override @inline function KI.get_local_id()
+    return (; x = Int(get_local_id(1)), y = Int(get_local_id(2)), z = Int(get_local_id(3)))
 end
 
-@device_override @inline function KA.__index_Group_Linear(ctx)
-    return get_group_id()
+@device_override @inline function KI.get_group_id()
+    return (; x = Int(get_group_id(1)), y = Int(get_group_id(2)), z = Int(get_group_id(3)))
 end
 
-@device_override @inline function KA.__index_Global_Linear(ctx)
-    return get_global_id()
+@device_override @inline function KI.get_global_id()
+    return (; x = Int(get_global_id(1)), y = Int(get_global_id(2)), z = Int(get_global_id(3)))
 end
 
-@device_override @inline function KA.__index_Local_Cartesian(ctx)
-    @inbounds KA.workitems(KA.__iterspace(ctx))[get_local_id()]
+@device_override @inline function KI.get_local_size()
+    return (; x = Int(get_local_size(1)), y = Int(get_local_size(2)), z = Int(get_local_size(3)))
 end
 
-@device_override @inline function KA.__index_Group_Cartesian(ctx)
-    @inbounds KA.blocks(KA.__iterspace(ctx))[get_group_id()]
+@device_override @inline function KI.get_num_groups()
+    return (; x = Int(get_num_groups(1)), y = Int(get_num_groups(2)), z = Int(get_num_groups(3)))
 end
 
-@device_override @inline function KA.__index_Global_Cartesian(ctx)
-    return @inbounds KA.expand(KA.__iterspace(ctx), get_group_id(), get_local_id())
+@device_override @inline function KI.get_global_size()
+    return (; x = Int(get_global_size(1)), y = Int(get_global_size(2)), z = Int(get_global_size(3)))
 end
 
 @device_override @inline function KA.__validindex(ctx)
@@ -201,7 +231,7 @@ end
 
 ## Shared and Scratch Memory
 
-@device_override @inline function KA.SharedMemory(::Type{T}, ::Val{Dims}, ::Val{Id}) where {T, Dims, Id}
+@device_override @inline function KI.localmemory(::Type{T}, ::Val{Dims}) where {T, Dims}
     ptr = oneAPI.emit_localmemory(T, Val(prod(Dims)))
     oneDeviceArray(Dims, ptr)
 end
@@ -213,14 +243,15 @@ end
 
 ## Synchronization and Printing
 
-@device_override @inline function KA.__synchronize()
-    barrier(0)
+@device_override @inline function KI.barrier()
+    barrier(SPIRVIntrinsics.LOCAL_MEM_FENCE | SPIRVIntrinsics.GLOBAL_MEM_FENCE)
 end
 
-@device_override @inline function KA.__print(args...)
+@device_override @inline function KI._print(args...)
     oneAPI._print(args...)
 end
 
+## COV_EXCL_STOP
 
 ## Other
 
