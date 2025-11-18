@@ -30,6 +30,9 @@ oneAPI_Level_Zero_Headers_jll = "f4bc562b-d309-54f8-9efb-476e56f0410d"
 oneAPI_Level_Zero_Loader_jll = "13eca655-d68d-5b81-8367-6d99d727ab01"
 oneAPI_Support_jll = "b049733a-a71d-5ed3-8eba-7d323ac00b36"
 
+[source]
+KernelAbstractions = {rev = "main", url = "https://github.com/JuliaGPU/KernelAbstractions.jl"}
+
 [compat]
 AbstractFFTs = "1.5.0"
 AcceleratedKernels = "0.3.1, 0.4"
@@ -39,7 +42,7 @@ ExprTools = "0.1"
 GPUArrays = "11.2.1"
 GPUCompiler = "1.6"
 GPUToolbox = "0.1, 0.2, 0.3, 1"
-KernelAbstractions = "0.10"
+KernelAbstractions = "0.9, 0.10"
 LLVM = "6, 7, 8, 9"
 NEO_jll = "=25.44.36015"
 Preferences = "1"
