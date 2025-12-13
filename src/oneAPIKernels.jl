@@ -191,8 +191,28 @@ end
 function KI.max_work_group_size(::oneAPIBackend)::Int
     oneAPI.oneL0.compute_properties(device()).maxTotalGroupSize
 end
+function KI.sub_group_size(::oneAPIBackend)::Int
+    sg_sizes = oneAPI.oneL0.compute_properties(device()).subGroupSizes
+    if 32 in sg_sizes
+        return 32
+    elseif 64 in sg_sizes
+        return 64
+    elseif 16 in sg_sizes
+        return 16
+    else
+        return 1
+    end
+end
 function KI.multiprocessor_count(::oneAPIBackend)::Int
     oneAPI.oneL0.properties(device()).numSlices
+end
+
+function KI.shfl_down_types(::oneAPIBackend)
+    res = copy(SPIRVIntrinsics.gentypes)
+
+    res = setdiff(res, [Float64])
+
+    return res
 end
 
 ## Indexing Functions
@@ -220,6 +240,16 @@ end
 @device_override @inline function KI.get_global_size()
     return (; x = Int(get_global_size(1)), y = Int(get_global_size(2)), z = Int(get_global_size(3)))
 end
+
+@device_override KI.get_sub_group_size() = get_sub_group_size()
+
+@device_override KI.get_max_sub_group_size() = get_max_sub_group_size()
+
+@device_override KI.get_num_sub_groups() = get_num_sub_groups()
+
+@device_override KI.get_sub_group_id() = get_sub_group_id()
+
+@device_override KI.get_sub_group_local_id() = get_sub_group_local_id()
 
 @device_override @inline function KA.__validindex(ctx)
     if KA.__dynamic_checkbounds(ctx)
@@ -253,6 +283,14 @@ end
     # visible to other work-items after the barrier. `LOCAL_MEM_FENCE | GLOBAL_MEM_FENCE`
     # ORs in the WorkgroupMemory/CrossWorkgroupMemory fence bits.
     barrier(SPIRVIntrinsics.LOCAL_MEM_FENCE | SPIRVIntrinsics.GLOBAL_MEM_FENCE)
+end
+
+@device_override @inline function KI.sub_group_barrier()
+    sub_group_barrier(SPIRVIntrinsics.LOCAL_MEM_FENCE | SPIRVIntrinsics.GLOBAL_MEM_FENCE)
+end
+
+@device_override function KI.shfl_down(val::T, offset::Integer) where T
+    sub_group_shuffle(val, get_sub_group_local_id() + offset)
 end
 
 @device_override @inline function KI._print(args...)
