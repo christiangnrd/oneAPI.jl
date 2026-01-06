@@ -1,6 +1,9 @@
 ## gpucompiler interface implementation
 
-struct oneAPICompilerParams <: AbstractCompilerParams end
+Base.@kwdef struct oneAPICompilerParams <: AbstractCompilerParams
+    sub_group_size::Int
+end
+
 const oneAPICompilerConfig = CompilerConfig{SPIRVCompilerTarget, oneAPICompilerParams}
 const oneAPICompilerJob = CompilerJob{SPIRVCompilerTarget,oneAPICompilerParams}
 
@@ -23,6 +26,9 @@ function GPUCompiler.finish_module!(job::oneAPICompilerJob, mod::LLVM.Module,
     entry = invoke(GPUCompiler.finish_module!,
                    Tuple{CompilerJob{SPIRVCompilerTarget}, typeof(mod), typeof(entry)},
                    job, mod, entry)
+
+    # Set the subgroup size
+    metadata(entry)["intel_reqd_sub_group_size"] = MDNode([ConstantInt(Int32(job.config.params.sub_group_size))])
 
     # OpenCL 2.0
     push!(metadata(mod)["opencl.ocl.version"],
@@ -303,9 +309,14 @@ function _driver_supports_bfloat16_spirv()
     end
 end
 
-@noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false, kwargs...)
+@noinline function _compiler_config(dev; kernel=true, name=nothing, always_inline=false, sub_group_size=32, kwargs...)
     supports_fp16 = oneL0.module_properties(device()).fp16flags & oneL0.ZE_DEVICE_MODULE_FLAG_FP16 == oneL0.ZE_DEVICE_MODULE_FLAG_FP16
     supports_fp64 = oneL0.module_properties(device()).fp64flags & oneL0.ZE_DEVICE_MODULE_FLAG_FP64 == oneL0.ZE_DEVICE_MODULE_FLAG_FP64
+
+    if sub_group_size ∉ oneL0.compute_properties(dev).subGroupSizes
+        @error("$sub_group_size is not a valid sub-group size for this device.")
+    end
+
     # Allow BFloat16 in IR if the device supports it (even if the SPIR-V runtime doesn't
     # advertise the extension). We lower bfloat→i16 in finish_ir! when needed.
     supports_bfloat16 = _device_supports_bfloat16()
@@ -318,7 +329,7 @@ end
 
     # create GPUCompiler objects
     target = SPIRVCompilerTarget(; extensions, supports_fp16, supports_fp64, supports_bfloat16, kwargs...)
-    params = oneAPICompilerParams()
+    params = oneAPICompilerParams(; sub_group_size)
     CompilerConfig(target, params; kernel, name, always_inline)
 end
 
