@@ -4,7 +4,7 @@ using ..oneAPI
 using ..oneAPI: @device_override, SPIRVIntrinsics, method_table, kernel_convert, zefunction
 
 import KernelAbstractions as KA
-import KernelAbstractions.KernelIntrinsics as KI
+import KernelAbstractions.KernelInterface as KI
 
 import StaticArrays
 
