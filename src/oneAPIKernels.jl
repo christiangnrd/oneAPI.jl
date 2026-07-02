@@ -20,6 +20,8 @@ struct oneAPIBackend <: KA.GPU
     always_inline::Bool
 end
 
+KA.versioninfo(io::IO, ::oneAPIBackend) = oneAPI.versioninfo(io)
+
 oneAPIBackend(; prefer_blocks = false, always_inline = false) = oneAPIBackend(prefer_blocks, always_inline)
 
 @inline KA.allocate(::oneAPIBackend, ::Type{T}, dims::Tuple; unified::Bool = false) where {T} = oneArray{T, length(dims), unified ? oneAPI.oneL0.SharedBuffer : oneAPI.oneL0.DeviceBuffer}(undef, dims)
