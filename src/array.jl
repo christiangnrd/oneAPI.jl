@@ -570,7 +570,13 @@ function GPUArrays.derive(::Type{T}, a::oneArray, dims::Dims{N}, offset::Int) wh
     Base.elsize(a) == 0 || error("Cannot derive a singleton array from non-singleton inputs")
   end
   offset = a.offset + offset * sizeof(T)
-  oneArray{T,N}(a.data, dims; a.maxsize, offset)
+  # `a` must stay rooted until `a.data` has been `copy`'d (i.e. its refcount bumped) by the
+  # oneArray constructor below: once `a.data` is extracted, `a` itself is no longer used in
+  # this function, so without `GC.@preserve` the GC is free to consider it dead and run its
+  # finalizer (which releases the very reference we're about to copy) before the copy happens,
+  # causing an intermittent "Attempt to copy a freed reference" error. See JuliaGPU/CUDA.jl#3087
+  # for the same race in a different guise.
+  GC.@preserve a oneArray{T,N}(a.data, dims; a.maxsize, offset)
 end
 
 
